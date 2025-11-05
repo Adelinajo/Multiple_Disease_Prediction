@@ -104,12 +104,12 @@ if disease == "Chronic Kidney Disease":
             hemoglobin = st.number_input("Hemoglobin", value=14.0)
             packed_cell_volume = st.number_input("Packed Cell Volume", value=42)
             white_blood_cell_count = st.number_input("White Blood Cell Count", value=8000)
-            hypertension = st.selectbox("Hypertension", ["No", "Yes"])
+            
 
         if st.button("🔍 Predict Kidney Disease"):
             features = np.array([[age, blood_pressure, specific_gravity, albumin, sugar,
                                   serum_creatinine, hemoglobin, packed_cell_volume,
-                                  white_blood_cell_count, 1 if hypertension == "Yes" else 0]])
+                                  white_blood_cell_count]])
             scaled = kidney_scaler.transform(features)
             prob = kidney_model.predict_proba(scaled)[:, 1][0]
             pred = 1 if prob >= 0.4 else 0
@@ -262,4 +262,5 @@ if disease == "Indian Liver Disease":
                 st.dataframe(df_original)
                 csv = df_original.to_csv(index=False).encode('utf-8')
                 st.download_button("💾 Download Full Results as CSV", data=csv, file_name="Liver_Disease_Predictions.csv", mime="text/csv")
+
 

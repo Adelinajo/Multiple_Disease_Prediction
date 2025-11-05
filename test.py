@@ -1,4 +1,3 @@
-#integrating all the disease layout
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -36,10 +35,50 @@ def load_all_models():
  parkinson_model, parkinson_scaler,
  liver_model, liver_scaler) = load_all_models()
 
+
+# ==============================================================
+# 🔠 MAPPING DICTIONARY (GLOBAL)
+# ==============================================================
+mapping_dict = {
+    'yes': 1, 'no': 0,
+    'abnormal': 1, 'normal': 0,
+    'present': 1, 'notpresent': 0,
+    'good': 1, 'poor': 0,
+    'ckd': 1, 'notckd': 0,
+    'male': 1, 'female': 0
+}
+
+# Expected columns for CKD model
+expected_cols = ['al', 'bgr', 'bu', 'su', 'bp', 'sc', 'age', 'pot', 'sod']
+
+
+# ==============================================================
+# 🧹 PREPROCESSING FUNCTION FOR BATCH DATA
+# ==============================================================
+def preprocess_batch_data(df, mapping_dict, expected_cols):
+    df = df.copy()
+
+    # Standardize column names
+    df.columns = df.columns.str.lower().str.strip()
+
+    # Map categorical values
+    for col in df.select_dtypes(include='object').columns:
+        df[col] = df[col].str.lower().map(mapping_dict).fillna(df[col])
+
+    # Keep only expected columns
+    df = df[[c for c in expected_cols if c in df.columns]]
+
+    # Convert numeric
+    df = df.apply(pd.to_numeric, errors='coerce')
+
+    # Fill missing numeric values with median
+    df = df.fillna(df.median(numeric_only=True))
+
+    return df
+
 # ===============================================================
 # 🎨 PAGE STYLING
 # ===============================================================
-st.set_page_config(page_title="Multiple Disease Prediction", layout="wide")
 st.markdown("""
     <style>
         [data-testid="stSidebar"] {
@@ -74,7 +113,7 @@ st.markdown("""
 # 🩺 Sidebar Selection
 # ==============================================================
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2966/2966481.png", width=80)
-st.sidebar.title("🏥 Disease Dashboard")
+st.sidebar.title("🏥 Mutiple Disease Prediction Dashboard")
 
 disease = st.sidebar.radio(
     "🧠 Select Disease to Predict",
@@ -85,56 +124,100 @@ disease = st.sidebar.radio(
 # 🧮 Chronic Kidney Disease Prediction
 # ==============================================================
 if disease == "Chronic Kidney Disease":
-    st.markdown("<div class='header'><h1>🩺 Chronic Kidney Disease Prediction</h1></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header'><h1>🧫 Chronic Kidney Disease Prediction</h1></div>", unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["🧍‍♂️ Single Prediction", "📂 Batch Prediction"])
 
-    # ---------------- SINGLE PREDICTION ---------------- #
+
+# ==============================================================
+# 🧍‍♂️ SINGLE PREDICTION
+# ==============================================================
     with tab1:
-        st.subheader("Enter Patient Data")
+       st.write("Enter the following patient details:")
+       col1, col2 = st.columns(2)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            age = st.number_input("Age", value=50)
-            blood_pressure = st.number_input("Blood Pressure", value=80)
-            specific_gravity = st.number_input("Specific Gravity", value=1.02)
-            albumin = st.number_input("Albumin", value=1)
-            sugar = st.number_input("Sugar", value=0)
-        with col2:
-            serum_creatinine = st.number_input("Serum Creatinine", value=1.2)
-            hemoglobin = st.number_input("Hemoglobin", value=14.0)
-            packed_cell_volume = st.number_input("Packed Cell Volume", value=42)
-            white_blood_cell_count = st.number_input("White Blood Cell Count", value=8000)
-            
+       with col1:
+           al = st.number_input("Albumin (al)", 0.000, 5.000, step=0.1)
+           bgr = st.number_input("Blood Glucose Random (bgr)", 0.0, 500.0, step=1.0)
+           bu = st.number_input("Blood Urea (bu)", 0.0, 300.0, step=1.0)
+           su = st.number_input("Sugar (su)", 0.0, 5.0, step=0.1)
+           bp = st.number_input("Blood Pressure (bp)", 0.0, 200.0, step=1.0)
 
-        if st.button("🔍 Predict Kidney Disease"):
-            features = np.array([[age, blood_pressure, specific_gravity, albumin, sugar,
-                                  serum_creatinine, hemoglobin, packed_cell_volume,
-                                  white_blood_cell_count]])
-            scaled = kidney_scaler.transform(features)
-            prob = kidney_model.predict_proba(scaled)[:, 1][0]
-            pred = 1 if prob >= 0.4 else 0
+       with col2:
+           sc = st.number_input("Serum Creatinine (sc)", 0.00, 15.00, step=0.1)
+           age = st.number_input("Age", 1, 120, step=1)
+           pot = st.number_input("Potassium (pot)", 0.0, 10.0, step=0.1)
+           sod = st.number_input("Sodium (sod)", 0.0, 200.0, step=1.0)
 
-            if pred == 1:
-                st.error(f"🚨 High chance of Chronic Kidney Disease (Prob = {prob:.2f})")
+           st.markdown("<br>", unsafe_allow_html=True)
+
+       if st.button("🔍 Predict Kidney Disease", use_container_width=True):
+ 
+            if kidney_model and kidney_scaler:
+                    input_data = np.array([[al, bgr, bu, su, bp, sc, age, pot, sod]])
+                    scaled_input = kidney_scaler.transform(input_data)
+                    pred = kidney_model.predict(scaled_input)[0]
+                    prob = kidney_model.predict_proba(scaled_input)[0][1]
+
+                    if pred == 1:
+                      st.error(f"🚨 Likely to have **Chronic Kidney Disease** (Probability: {prob:.2f})")
+                    else:
+                      st.success(f"✅ Not likely to have Chronic Kidney Disease (Probability: {prob:.2f})")
             else:
-                st.success(f"✅ Healthy (Prob = {prob:.2f})")
+                st.warning("⚠️ Model or scaler missing!")
 
-    # ---------------- BATCH PREDICTION ---------------- #
+    
+# ==============================================================
+# 📂 BATCH PREDICTION
+# ==============================================================
     with tab2:
-        uploaded_file = st.file_uploader("📂 Upload Kidney Dataset (CSV)", type=["csv"])
-        if uploaded_file is not None:
-            df = pd.read_csv(uploaded_file)
-            st.dataframe(df)
-            if st.button("📊 Run Kidney Batch Prediction"):
-                scaled = kidney_scaler.transform(df)
-                probs = kidney_model.predict_proba(scaled)[:, 1]
-                preds = (probs >= 0.4).astype(int)
-                df["Predicted Probability"] = probs
-                df["Predicted Label"] = np.where(preds == 1, "Chronic Kidney Disease", "Healthy")
-                st.dataframe(df)
-                csv = df.to_csv(index=False).encode("utf-8")
-                st.download_button("💾 Download Predictions", csv, "Kidney_Predictions.csv", "text/csv")
+       st.subheader("📂 Batch Kidney Disease Prediction")
 
+       uploaded_file = st.file_uploader("📁 Upload CSV file (with all 26 columns)", type=["csv"])
+
+       if uploaded_file is not None:
+            try:
+                uploaded_file.seek(0)  # Reset pointer before reading
+                df = pd.read_csv(uploaded_file)
+                st.success("✅ File uploaded successfully!")
+                st.dataframe(df)
+
+            # --- Batch Prediction Button ---
+                if st.button("🔍 Run Batch Prediction"):
+                
+                    if kidney_model and kidney_scaler:
+                        with st.spinner("🔄 Preprocessing and predicting..."):
+                            expected_cols = ['al', 'bgr', 'bu', 'su', 'bp', 'sc', 'age', 'pot', 'sod']
+                            df_clean = preprocess_batch_data(df, mapping_dict, expected_cols)
+
+                            st.write("✅ After preprocessing:")
+                            st.dataframe(df_clean.head())
+
+                        # Scale & predict
+                            scaled_df = kidney_scaler.transform(df_clean)
+                            preds = kidney_model.predict(scaled_df)
+                            probs = kidney_model.predict_proba(scaled_df)[:, 1]
+
+                        # Add predictions
+                            threshold = 0.34 
+                            df["Probability_CKD"] = probs
+                            df["Prediction"] = np.where(probs >= threshold, "ChronicKidneyDisease", "Healthy")
+
+                            st.success("✅ Batch Prediction Complete!")
+                            st.dataframe(df)
+
+                        # Download button
+                            csv = df.to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                label="⬇️ Download Predictions",
+                                data=csv,
+                                file_name="kidney_batch_predictions.csv",
+                                mime="text/csv"
+                                )
+                    else:
+                        st.warning("⚠️ Model or Scaler not found!")
+
+            except Exception as e:
+               st.error(f"❌ Error processing file: {e}")
 
 # ==============================================================
 # 🧠 Parkinson’s Disease Prediction
@@ -262,5 +345,4 @@ if disease == "Indian Liver Disease":
                 st.dataframe(df_original)
                 csv = df_original.to_csv(index=False).encode('utf-8')
                 st.download_button("💾 Download Full Results as CSV", data=csv, file_name="Liver_Disease_Predictions.csv", mime="text/csv")
-
 
